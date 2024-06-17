@@ -1,1 +1,67 @@
-test
+pipeline {
+    agent any
+
+    environment {
+        // 스크립트를 저장할 경로 및 파일 이름
+        SCRIPT_PATH = '/path/to/your/script'
+        SCRIPT_FILE = 'my_script.sh'
+        OUTPUT_FILE = 'test_results.txt'
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                // 스크립트 경로로 이동 후 파일 생성
+                script {
+                    // 스크립트 경로에 디렉토리를 생성
+                    sh "mkdir -p ${SCRIPT_PATH}"
+                    
+                    // 스크립트 파일을 생성하고 내용을 작성
+                    writeFile file: "${SCRIPT_PATH}/${SCRIPT_FILE}", text: '''
+                    #!/bin/bash
+                    javac -encoding UTF-8 -d classes Practice/src/**/*.java
+                    if [ $? -eq 0 ]; then
+                        java -cp classes:lib/*:path/to/eclipse/plugins/junit-platform-console-standalone-1.7.1.jar org.junit.platform.console.ConsoleLauncher --scan-classpath > ${WORKSPACE}/${OUTPUT_FILE}
+                    else
+                        echo "Compilation failed" > ${WORKSPACE}/${OUTPUT_FILE}
+                        exit 1
+                    fi
+                    '''
+                    
+                    // 스크립트 파일에 실행 권한 부여
+                    sh "chmod +x ${SCRIPT_PATH}/${SCRIPT_FILE}"
+                }
+            }
+        }
+
+        stage('Execute Script') {
+            steps {
+                // 스크립트를 실행
+                sh "${SCRIPT_PATH}/${SCRIPT_FILE}"
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                // 출력 파일을 확인
+                script {
+                    def output = readFile "${OUTPUT_FILE}"
+                    echo "File content: ${output}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // 테스트 결과 파일을 저장하기 위해 아카이브
+            archiveArtifacts artifacts: "${OUTPUT_FILE}"
+        }
+        failure {
+            echo 'Build or test failed'
+        }
+        success {
+            echo 'Build and test succeeded'
+        }
+    }
+}
